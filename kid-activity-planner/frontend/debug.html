@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="p-8">
+    <h1 class="text-2xl font-bold mb-4">Debug Test</h1>
+    
+    <button id="test-btn" class="bg-blue-500 text-white px-4 py-2 rounded">Test API</button>
+    
+    <div id="results" class="mt-4"></div>
+    
+    <script>
+        document.getElementById('test-btn').addEventListener('click', async () => {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<p>Testing API...</p>';
+            
+            try {
+                const response = await fetch('http://localhost:8004/discover-activities', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        location: "San Francisco, CA",
+                        child_age: 8,
+                        interests: ["science"],
+                        special_needs: [],
+                        available_days: ["weekend"],
+                        preferred_times: ["morning"],
+                        budget_preference: "moderate"
+                    })
+                });
+                
+                const data = await response.json();
+                console.log('API Response:', data);
+                
+                let html = '<h2 class="text-xl font-bold mt-4">API Response:</h2>';
+                html += `<p>Has events: ${!!data.events}</p>`;
+                html += `<p>Has categorized: ${!!data.categorized}</p>`;
+                
+                if (data.categorized) {
+                    html += '<h3 class="text-lg font-bold mt-2">Categorized Events:</h3>';
+                    for (const [category, events] of Object.entries(data.categorized)) {
+                        html += `<div class="border p-4 mb-2">`;
+                        html += `<h4 class="font-bold">${category} (${events.length} events)</h4>`;
+                        if (events.length > 0) {
+                            const event = events[0];
+                            html += `<p>First event has link: ${!!event.link}</p>`;
+                            html += `<p>Link value: ${event.link || 'No link'}</p>`;
+                            
+                            // Test the button rendering
+                            html += '<div class="mt-2 p-2 bg-gray-100">';
+                            html += '<p>Button should appear below:</p>';
+                            html += event.link ? `
+                                <a href="${event.link}" target="_blank" rel="noopener noreferrer"
+                                   class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                                    <span>🔗</span>
+                                    View Event
+                                </a>
+                            ` : '<span class="text-xs text-gray-400">No link available</span>';
+                            html += '</div>';
+                        }
+                        html += '</div>';
+                    }
+                }
+                
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
+            }
+        });
+    </script>
+</body>
+</html>

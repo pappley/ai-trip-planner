@@ -1,0 +1,31 @@
+# Kid Activity Planner - Real Event API Integration Environment Variables
+# Copy this file to .env and add your actual API keys
+
+# LLM Provider (choose one)
+OPENAI_API_KEY=your_openai_api_key_here
+# OR
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+OPENROUTER_MODEL=openai/gpt-4o-mini
+
+# Real Event API Integrations
+# PredictHQ API (for comprehensive global events)
+PREDICTHQ_API_KEY=your_predicthq_api_key_here
+
+# Eventbrite API (for real events)
+EVENTBRITE_API_KEY=your_eventbrite_api_key_here
+
+# Facebook Events API (for real events)
+FACEBOOK_ACCESS_TOKEN=your_facebook_access_token_here
+
+# Google Places API (for local venues)
+GOOGLE_PLACES_API_KEY=your_google_places_api_key_here
+
+# Yelp API (for local businesses and events)
+YELP_API_KEY=your_yelp_api_key_here
+
+# Observability (optional)
+ARIZE_SPACE_ID=your_arize_space_id
+ARIZE_API_KEY=your_arize_api_key
+
+# Development
+TEST_MODE=false

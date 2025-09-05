@@ -1,0 +1,19 @@
+# Kid Activity Planner Environment Variables
+
+# LLM Provider (choose one)
+OPENAI_API_KEY=your_openai_api_key_here
+# OR
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+OPENROUTER_MODEL=openai/gpt-4o-mini
+
+# Test Mode (set to 1 for development with mock data)
+TEST_MODE=1
+
+# Arize observability configuration (optional)
+ARIZE_SPACE_ID=your_arize_space_id_here
+ARIZE_API_KEY=your_arize_api_key_here
+
+# Event Discovery APIs (optional for Phase 1)
+EVENTBRITE_API_KEY=your_eventbrite_api_key_here
+FACEBOOK_APP_ID=your_facebook_app_id_here
+OPENWEATHER_API_KEY=your_openweather_api_key_here

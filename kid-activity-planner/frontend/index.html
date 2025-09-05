@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cleveland Kid Activity Planner - MVP</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS - Production Ready -->
+  <script src="https://cdn.tailwindcss.com?cache=20250102"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: {
+              50: '#fef3c7',
+              100: '#fde68a',
+              200: '#fcd34d',
+              300: '#fbbf24',
+              400: '#f59e0b',
+              500: '#d97706',
+              600: '#b45309',
+              700: '#92400e',
+              800: '#78350f',
+              900: '#451a03',
+            },
+            accent: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              200: '#bfdbfe',
+              300: '#93c5fd',
+              400: '#60a5fa',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              800: '#1e40af',
+              900: '#1e3a8a',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+  <!-- Lucide Icons - Cache busted -->
+  <script src="https://unpkg.com/lucide@latest?cache=20250102"></script>
+  <script>
+    // Force refresh Lucide icons and clear any cached issues
+    document.addEventListener('DOMContentLoaded', function() {
+      // Wait for Lucide to load, then refresh icons
+      setTimeout(() => {
+        if (typeof lucide !== 'undefined') {
+          lucide.createIcons();
+        }
+      }, 100);
+    });
+  </script>
+</head>
+<body class="bg-gray-50 text-gray-900 antialiased font-sans">
+  <!-- Nav -->
+  <header class="border-b border-gray-200 bg-white/95 backdrop-blur-sm">
+    <div class="mx-auto max-w-7xl px-6 py-5 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-primary-500 text-white shadow-sm">
+          <i data-lucide="baby" class="h-5 w-5"></i>
+        </span>
+        <span class="text-xl font-semibold tracking-tight text-gray-900">Cleveland Kid Activity Planner</span>
+        <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded-full ml-2">MVP</span>
+      </div>
+      <div class="hidden md:flex items-center gap-6">
+        <a href="#" class="text-sm font-medium text-gray-600 hover:text-primary-600 transition-colors">Activities</a>
+        <a href="#" class="text-sm font-medium text-gray-600 hover:text-primary-600 transition-colors">Safety</a>
+        <a href="#" class="text-sm font-medium text-gray-600 hover:text-primary-600 transition-colors">Help</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="mx-auto max-w-7xl px-6 pt-12 pb-10">
+    <div class="relative overflow-hidden rounded-3xl bg-primary-500 shadow-xl">
+      <div class="absolute inset-0 bg-gradient-to-br from-primary-400 to-primary-600"></div>
+      <div class="absolute inset-0 opacity-10">
+        <div class="absolute top-0 right-0 w-96 h-96 bg-white rounded-full -translate-y-48 translate-x-48"></div>
+        <div class="absolute bottom-0 left-0 w-64 h-64 bg-white rounded-full translate-y-32 -translate-x-32"></div>
+      </div>
+      <div class="relative grid gap-8 p-8 md:grid-cols-2 md:p-16">
+        <div class="flex flex-col justify-center">
+          <h1 class="text-white text-4xl md:text-6xl font-bold tracking-tight leading-tight">
+            Find Perfect Activities for Your Kids
+          </h1>
+          <p class="mt-4 text-primary-100 text-lg md:text-xl leading-relaxed">
+            Discover age-appropriate activities, events, and experiences tailored to your child's interests and your family's schedule.
+          </p>
+          <div class="mt-8 flex flex-wrap items-center gap-4">
+            <div class="inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-2.5 text-white text-sm font-medium backdrop-blur-sm">
+              <i data-lucide="shield-check" class="h-4 w-4"></i>
+              Safety First
+            </div>
+            <div class="inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-2.5 text-white text-sm font-medium backdrop-blur-sm">
+              <i data-lucide="calendar" class="h-4 w-4"></i>
+              Smart Scheduling
+            </div>
+            <div class="inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-2.5 text-white text-sm font-medium backdrop-blur-sm">
+              <i data-lucide="heart" class="h-4 w-4"></i>
+              Age-Appropriate
+            </div>
+          </div>
+        </div>
+        <div class="hidden md:flex items-center justify-center">
+          <div class="relative w-full max-w-md">
+            <div class="absolute inset-0 bg-white/20 rounded-2xl blur-xl"></div>
+            <div class="relative bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
+              <div class="space-y-4">
+                <div class="flex items-center gap-3">
+                  <div class="w-3 h-3 bg-white/60 rounded-full"></div>
+                  <div class="w-3 h-3 bg-white/40 rounded-full"></div>
+                  <div class="w-3 h-3 bg-white/20 rounded-full"></div>
+                </div>
+                <div class="space-y-3">
+                  <div class="h-2 bg-white/30 rounded-full w-3/4"></div>
+                  <div class="h-2 bg-white/20 rounded-full w-1/2"></div>
+                  <div class="h-2 bg-white/25 rounded-full w-2/3"></div>
+                </div>
+                <div class="flex items-center gap-2 text-white/80 text-sm">
+                  <i data-lucide="search" class="h-4 w-4"></i>
+                  <span>Finding perfect activities...</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature cards -->
+    <div class="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="group rounded-2xl border border-gray-200 bg-white p-6 shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-1">
+        <div class="flex items-start gap-4">
+          <span class="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50 text-primary-600 group-hover:bg-primary-100 transition-colors">
+            <i data-lucide="search" class="h-6 w-6"></i>
+          </span>
+          <div class="flex-1">
+            <div class="font-semibold text-gray-900 tracking-tight">Discover</div>
+            <p class="mt-1 text-sm text-gray-600 leading-relaxed">Find local events, classes, and activities near you.</p>
+          </div>
+        </div>
+      </div>
+      <div class="group rounded-2xl border border-gray-200 bg-white p-6 shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-1">
+        <div class="flex items-start gap-4">
+          <span class="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-accent-50 text-accent-600 group-hover:bg-accent-100 transition-colors">
+            <i data-lucide="shield-check" class="h-6 w-6"></i>
+          </span>
+          <div class="flex-1">
+            <div class="font-semibold text-gray-900 tracking-tight">Safety</div>
+            <p class="mt-1 text-sm text-gray-600 leading-relaxed">Age-appropriate activities with safety validation.</p>
+          </div>
+        </div>
+      </div>
+      <div class="group rounded-2xl border border-gray-200 bg-white p-6 shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-1">
+        <div class="flex items-start gap-4">
+          <span class="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-green-50 text-green-600 group-hover:bg-green-100 transition-colors">
+            <i data-lucide="calendar" class="h-6 w-6"></i>
+          </span>
+          <div class="flex-1">
+            <div class="font-semibold text-gray-900 tracking-tight">Schedule</div>
+            <p class="mt-1 text-sm text-gray-600 leading-relaxed">Match activities to your family's availability.</p>
+          </div>
+        </div>
+      </div>
+      <div class="group rounded-2xl border border-gray-200 bg-white p-6 shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-1">
+        <div class="flex items-start gap-4">
+          <span class="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-purple-50 text-purple-600 group-hover:bg-purple-100 transition-colors">
+            <i data-lucide="heart" class="h-6 w-6"></i>
+          </span>
+          <div class="flex-1">
+            <div class="font-semibold text-gray-900 tracking-tight">Personalized</div>
+            <p class="mt-1 text-sm text-gray-600 leading-relaxed">Tailored to your child's interests and needs.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Activity Planner -->
+  <main class="mx-auto max-w-7xl px-6 pb-20">
+    <div class="grid gap-8 lg:grid-cols-3">
+      <!-- Form -->
+      <section class="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+        <div class="mb-6">
+          <h2 class="text-2xl font-bold tracking-tight text-gray-900">Find Activities</h2>
+          <p class="mt-2 text-gray-600">Tell us about your child and we'll find perfect activities.</p>
+        </div>
+
+        <!-- Cleveland MVP Info -->
+        <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+          <div class="flex items-start gap-3">
+            <i data-lucide="info" class="h-5 w-5 text-blue-600 mt-0.5"></i>
+            <div>
+              <h3 class="font-semibold text-blue-900 mb-1">Cleveland MVP</h3>
+              <p class="text-sm text-blue-700">This version is focused on Cleveland, Ohio. We're building a comprehensive database of local events, venues, and activities to provide the best experience for Cleveland families.</p>
+            </div>
+          </div>
+        </div>
+
+        <form id="activityForm" class="space-y-6" autocomplete="off">
+          <!-- Child Age -->
+          <div>
+            <label for="childAge" class="block text-sm font-semibold text-gray-900 mb-2">Child's Age</label>
+            <div class="relative">
+              <input id="childAge" type="number" required min="1" max="17" placeholder="e.g., 8"
+                     class="w-full rounded-xl border border-gray-300 bg-white px-4 py-3.5 text-gray-900 placeholder-gray-500 shadow-sm outline-none transition-all focus:border-primary-500 focus:ring-4 focus:ring-primary-100" />
+              <span class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
+                <i data-lucide="baby" class="h-5 w-5"></i>
+              </span>
+            </div>
+          </div>
+
+          <!-- Location -->
+          <div>
+            <label for="location" class="block text-sm font-semibold text-gray-900 mb-2">Location</label>
+            <div class="relative">
+              <input id="location" type="text" required placeholder="Cleveland, OH"
+                     class="w-full rounded-xl border border-gray-300 bg-white px-4 py-3.5 text-gray-900 placeholder-gray-500 shadow-sm outline-none transition-all focus:border-primary-500 focus:ring-4 focus:ring-primary-100" />
+              <span class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
+                <i data-lucide="map-pin" class="h-5 w-5"></i>
+              </span>
+              <div class="absolute inset-y-0 right-12 flex items-center">
+                <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">Cleveland MVP</span>
+              </div>
+            </div>
+            <p class="mt-1 text-sm text-gray-500">Currently focused on Cleveland, Ohio for our MVP</p>
+          </div>
+
+          <!-- Interests -->
+          <div>
+            <label for="interests" class="block text-sm font-semibold text-gray-900 mb-2">Interests (optional)</label>
+            <div class="relative">
+              <input id="interests" type="text" placeholder="e.g., science, art, sports, music"
+                     class="w-full rounded-xl border border-gray-300 bg-white px-4 py-3.5 text-gray-900 placeholder-gray-500 shadow-sm outline-none transition-all focus:border-primary-500 focus:ring-4 focus:ring-primary-100" />
+              <span class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
+                <i data-lucide="heart" class="h-5 w-5"></i>
+              </span>
+            </div>
+          </div>
+
+          <!-- Activity Types -->
+          <div>
+            <label for="activityTypes" class="block text-sm font-semibold text-gray-900 mb-2">Activity Types (optional)</label>
+            <div class="relative">
+              <input id="activityTypes" type="text" placeholder="e.g., indoor, outdoor, educational, social"
+                     class="w-full rounded-xl border border-gray-300 bg-white px-4 py-3.5 text-gray-900 placeholder-gray-500 shadow-sm outline-none transition-all focus:border-primary-500 focus:ring-4 focus:ring-primary-100" />
+              <span class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
+                <i data-lucide="activity" class="h-5 w-5"></i>
+              </span>
+            </div>
+          </div>
+
+          <!-- Special Needs -->
+          <div>
+            <label for="specialNeeds" class="block text-sm font-semibold text-gray-900 mb-2">Special Needs (optional)</label>
+            <div class="relative">
+              <input id="specialNeeds" type="text" placeholder="e.g., wheelchair accessible, sensory friendly, learning support"
+                     class="w-full rounded-xl border border-gray-300 bg-white px-4 py-3.5 text-gray-900 placeholder-gray-500 shadow-sm outline-none transition-all focus:border-primary-500 focus:ring-4 focus:ring-primary-100" />
+              <span class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
+                <i data-lucide="heart" class="h-5 w-5"></i>
+              </span>
+            </div>
+          </div>
+
+          <!-- Available Days -->
+          <div>
+            <label class="block text-sm font-semibold text-gray-900 mb-3">Available Days</label>
+            <div class="grid grid-cols-2 gap-3">
+              <label class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 hover:border-primary-300 cursor-pointer transition-colors">
+                <input type="checkbox" name="availableDays" value="weekend" checked class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
+                <span class="text-sm font-medium text-gray-700">Weekends</span>
+              </label>
+              <label class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 hover:border-primary-300 cursor-pointer transition-colors">
+                <input type="checkbox" name="availableDays" value="weekday" class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
+                <span class="text-sm font-medium text-gray-700">Weekdays</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Preferred Times -->
+          <div>
+            <label class="block text-sm font-semibold text-gray-900 mb-3">Preferred Times</label>
+            <div class="grid grid-cols-2 gap-3">
+              <label class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 hover:border-primary-300 cursor-pointer transition-colors">
+                <input type="checkbox" name="preferredTimes" value="morning" checked class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
+                <span class="text-sm font-medium text-gray-700">Morning</span>
+              </label>
+              <label class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 hover:border-primary-300 cursor-pointer transition-colors">
+                <input type="checkbox" name="preferredTimes" value="afternoon" checked class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
+                <span class="text-sm font-medium text-gray-700">Afternoon</span>
+              </label>
+              <label class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 hover:border-primary-300 cursor-pointer transition-colors">
+                <input type="checkbox" name="preferredTimes" value="evening" class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
+                <span class="text-sm font-medium text-gray-700">Evening</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Budget Preference -->
+          <div>
+            <label for="budgetPreference" class="block text-sm font-semibold text-gray-900 mb-2">Budget Preference</label>
+            <div class="relative">
+              <select id="budgetPreference" class="w-full rounded-xl border border-gray-300 bg-white px-4 py-3.5 text-gray-900 shadow-sm outline-none transition-all focus:border-primary-500 focus:ring-4 focus:ring-primary-100">
+                <option value="budget">Budget (Free - $15/activity)</option>
+                <option value="moderate" selected>Moderate ($15 - $30/activity)</option>
+                <option value="premium">Premium ($30+/activity)</option>
+              </select>
+              <span class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
+                <i data-lucide="dollar-sign" class="h-5 w-5"></i>
+              </span>
+            </div>
+          </div>
+
+          <!-- Submit -->
+          <div class="pt-4">
+            <button type="submit"
+                    class="w-full inline-flex items-center justify-center gap-3 rounded-xl bg-primary-500 px-6 py-4 text-white font-semibold shadow-lg transition-all hover:bg-primary-600 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-primary-200 transform hover:-translate-y-0.5">
+              <i data-lucide="search" class="h-5 w-5"></i>
+              <span>Find Activities</span>
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Results -->
+      <section class="lg:col-span-2 space-y-6">
+        <div id="placeholderCard" class="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-sm">
+          <div class="max-w-md mx-auto">
+            <div class="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-50 mb-6">
+              <i data-lucide="baby" class="h-8 w-8 text-primary-600"></i>
+            </div>
+            <h3 class="text-2xl font-bold tracking-tight text-gray-900 mb-3">Ready to Find Activities?</h3>
+            <p class="text-gray-600 leading-relaxed mb-8">Fill out the form to discover age-appropriate activities, events, and experiences for your child.</p>
+            <div class="grid gap-4 sm:grid-cols-3">
+              <div class="rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
+                <div class="flex items-center gap-3 text-gray-700 mb-2">
+                  <i data-lucide="flask-conical" class="h-5 w-5 text-blue-500"></i>
+                  <span class="font-semibold">STEM</span>
+                </div>
+                <p class="text-sm text-gray-600">Science, coding, and educational activities.</p>
+              </div>
+              <div class="rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
+                <div class="flex items-center gap-3 text-gray-700 mb-2">
+                  <i data-lucide="brush" class="h-5 w-5 text-purple-500"></i>
+                  <span class="font-semibold">Arts</span>
+                </div>
+                <p class="text-sm text-gray-600">Creative and artistic expression.</p>
+              </div>
+              <div class="rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
+                <div class="flex items-center gap-3 text-gray-700 mb-2">
+                  <i data-lucide="activity" class="h-5 w-5 text-green-500"></i>
+                  <span class="font-semibold">Sports</span>
+                </div>
+                <p class="text-sm text-gray-600">Physical activities and team sports.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="results" class="hidden space-y-6"></div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="border-t border-gray-200 bg-white">
+    <div class="mx-auto max-w-7xl px-6 py-12 text-sm text-gray-600">
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-6">
+        <div class="flex items-center gap-3">
+          <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary-500 text-white">
+            <i data-lucide="baby" class="h-5 w-5"></i>
+          </span>
+          <span class="font-medium">&copy; <span id="year"></span> Kid Activity Planner</span>
+        </div>
+        <div class="flex items-center gap-6">
+          <a class="hover:text-primary-600 transition-colors" href="#">Privacy</a>
+          <a class="hover:text-primary-600 transition-colors" href="#">Terms</a>
+          <a class="hover:text-primary-600 transition-colors" href="#">Support</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Initialize icons and year
+    function renderIcons() { if (window.lucide) lucide.createIcons(); }
+    document.getElementById('year').textContent = new Date().getFullYear();
+    renderIcons();
+
+    // Activity planner logic
+    const form = document.getElementById('activityForm');
+    const results = document.getElementById('results');
+    const placeholderCard = document.getElementById('placeholderCard');
+
+    async function submitActivityRequest(e) {
+      e.preventDefault();
+
+      const childAge = parseInt(document.getElementById('childAge').value);
+      const location = document.getElementById('location').value.trim();
+      const interests = document.getElementById('interests').value.trim().split(',').map(s => s.trim()).filter(s => s);
+      const activityTypes = document.getElementById('activityTypes').value.trim().split(',').map(s => s.trim()).filter(s => s);
+      const specialNeeds = document.getElementById('specialNeeds').value.trim().split(',').map(s => s.trim()).filter(s => s);
+      const budgetPreference = document.getElementById('budgetPreference').value;
+      
+      // Get selected available days
+      const availableDays = Array.from(document.querySelectorAll('input[name="availableDays"]:checked')).map(cb => cb.value);
+      
+      // Get selected preferred times
+      const preferredTimes = Array.from(document.querySelectorAll('input[name="preferredTimes"]:checked')).map(cb => cb.value);
+
+      if (!childAge || !location) {
+        alert('Please enter your child\'s age and location.');
+        return;
+      }
+
+      // Cleveland MVP validation
+      const locationLower = location.toLowerCase();
+      if (!locationLower.includes('cleveland') && !locationLower.includes('ohio') && !locationLower.includes('oh')) {
+        alert('This MVP is currently focused on Cleveland, Ohio. Please enter "Cleveland, OH" or "Cleveland, Ohio" to continue.');
+        return;
+      }
+
+      if (availableDays.length === 0) {
+        alert('Please select at least one available day.');
+        return;
+      }
+
+      if (preferredTimes.length === 0) {
+        alert('Please select at least one preferred time.');
+        return;
+      }
+
+      placeholderCard.classList.add('hidden');
+      results.classList.remove('hidden');
+      results.innerHTML = `
+        <div class="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+          <div class="flex items-center justify-center gap-4 text-gray-700">
+            <div class="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50">
+              <i data-lucide="loader-2" class="h-6 w-6 animate-spin text-primary-600"></i>
+            </div>
+            <div>
+              <div class="font-semibold text-gray-900">Finding activities...</div>
+              <p class="text-sm text-gray-600">Discovering age-appropriate activities for your ${childAge}-year-old in ${location}</p>
+            </div>
+          </div>
+        </div>
+      `;
+      renderIcons();
+
+      try {
+        const resp = await fetch('/discover-activities', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            child_age: childAge, 
+            location: location, 
+            interests: interests,
+            activity_types: activityTypes,
+            special_needs: specialNeeds,
+            budget_preference: budgetPreference,
+            available_days: availableDays,
+            preferred_times: preferredTimes,
+            transportation: "car"
+          })
+        });
+
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        
+        // Debug: log the API response
+        console.log('=== DEBUG: API Response ===');
+        console.log('API Response:', data);
+        console.log('Events from API:', data.events);
+        console.log('Categorized data:', data.categorized);
+        if (data.events && data.events.length > 0) {
+          console.log('First event:', data.events[0]);
+          console.log('First event link:', data.events[0].link);
+        }
+        if (data.categorized) {
+          console.log('First categorized category:', Object.keys(data.categorized)[0]);
+          const firstCategory = Object.keys(data.categorized)[0];
+          if (data.categorized[firstCategory] && data.categorized[firstCategory].length > 0) {
+            console.log('First categorized event:', data.categorized[firstCategory][0]);
+            console.log('First categorized event link:', data.categorized[firstCategory][0].link);
+          }
+        }
+
+        // Display results
+        let resultsHtml = `
+          <div class="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+            <div class="mb-6 flex items-center justify-between">
+              <div>
+                <h3 class="text-2xl font-bold tracking-tight text-gray-900">Found ${data.total_found} Activities</h3>
+                <p class="text-gray-600 mt-1">Age-appropriate activities for your ${childAge}-year-old in ${location}</p>
+              </div>
+              <div class="text-sm text-gray-500">
+                ${data.age_appropriate} age-appropriate
+              </div>
+            </div>
+        `;
+
+        // Group by category
+        for (const [category, events] of Object.entries(data.categorized)) {
+          if (events.length > 0) {
+            resultsHtml += `
+              <div class="mb-8">
+                <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <i data-lucide="tag" class="h-5 w-5 text-primary-600"></i>
+                  ${category} (${events.length})
+                </h4>
+                <div class="grid gap-4 sm:grid-cols-2">
+            `;
+            
+            events.forEach(event => {
+              // Debug: log event data
+              console.log('=== DEBUG: Rendering Event ===');
+              console.log('Event data:', event);
+              console.log('Event has link:', !!event.link);
+              console.log('Link value:', event.link);
+              console.log('Event title:', event.title);
+              
+              // Debug: Test button HTML generation
+              const buttonHtml = event.link ? `
+                      <a href="${event.link}" target="_blank" rel="noopener noreferrer" 
+                         class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-primary-600 bg-primary-50 rounded-lg hover:bg-primary-100 transition-colors">
+                        <i data-lucide="external-link" class="h-3 w-3"></i>
+                        View Event
+                      </a>
+                    ` : '<span class="text-xs text-gray-400">No link available</span>';
+              console.log('Button HTML generated:', buttonHtml);
+              
+              resultsHtml += `
+                <div class="rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                  <div class="flex items-start justify-between mb-3">
+                    <h5 class="font-semibold text-gray-900 flex-1">${event.title || 'Activity'}</h5>
+                    ${buttonHtml}
+                  </div>
+                  <div class="space-y-2 text-sm text-gray-600">
+                    ${event.location ? `<div class="flex items-center gap-2"><i data-lucide="map-pin" class="h-4 w-4"></i>${event.location}</div>` : ''}
+                    ${event.date ? `<div class="flex items-center gap-2"><i data-lucide="calendar" class="h-4 w-4"></i>${event.date}</div>` : ''}
+                    ${event.age_range ? `<div class="flex items-center gap-2"><i data-lucide="baby" class="h-4 w-4"></i>Ages ${event.age_range}</div>` : ''}
+                    ${event.price ? `<div class="flex items-center gap-2"><i data-lucide="dollar-sign" class="h-4 w-4"></i>${event.price}</div>` : ''}
+                  </div>
+                </div>
+              `;
+            });
+            
+            resultsHtml += `
+                </div>
+              </div>
+            `;
+          }
+        }
+
+        resultsHtml += `
+          </div>
+        `;
+
+        results.innerHTML = resultsHtml;
+        renderIcons();
+
+      } catch (err) {
+        results.innerHTML = `
+          <div class="rounded-2xl border border-red-200 bg-red-50 p-8">
+            <div class="flex items-center gap-4">
+              <div class="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-red-100">
+                <i data-lucide="alert-triangle" class="h-6 w-6 text-red-600"></i>
+              </div>
+              <div>
+                <div class="font-semibold text-red-900">Failed to find activities</div>
+                <p class="text-sm text-red-700 mt-1">Please check your connection and try again.</p>
+              </div>
+            </div>
+          </div>
+        `;
+        renderIcons();
+        console.error('Activity search error:', err);
+      }
+    }
+
+    form.addEventListener('submit', submitActivityRequest);
+  </script>
+</body>
+</html>
