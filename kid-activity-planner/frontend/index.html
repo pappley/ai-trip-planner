@@ -200,7 +200,7 @@
             <i data-lucide="info" class="h-5 w-5 text-blue-600 mt-0.5"></i>
             <div>
               <h3 class="font-semibold text-blue-900 mb-1">Cleveland MVP</h3>
-              <p class="text-sm text-blue-700">This version is focused on Cleveland, Ohio. We're building a comprehensive database of local events, venues, and activities to provide the best experience for Cleveland families.</p>
+              <p class="text-sm text-blue-700">This version is focused on Cleveland, Ohio. We're building a comprehensive database of local events, venues, and activities to provide the best experience for Cleveland families. You can optionally select a specific neighborhood for more targeted results.</p>
             </div>
           </div>
         </div>
@@ -222,8 +222,8 @@
           <div>
             <label for="location" class="block text-sm font-semibold text-gray-900 mb-2">Location</label>
             <div class="relative">
-              <input id="location" type="text" required placeholder="Cleveland, OH"
-                     class="w-full rounded-xl border border-gray-300 bg-white px-4 py-3.5 text-gray-900 placeholder-gray-500 shadow-sm outline-none transition-all focus:border-primary-500 focus:ring-4 focus:ring-primary-100" />
+              <input id="location" type="text" required placeholder="Cleveland, OH" value="Cleveland, OH"
+                     class="w-full rounded-xl border border-gray-300 bg-white px-4 py-3.5 text-gray-900 placeholder-gray-500 shadow-sm outline-none transition-all focus:border-primary-500 focus:ring-4 focus:ring-primary-100" readonly />
               <span class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
                 <i data-lucide="map-pin" class="h-5 w-5"></i>
               </span>
@@ -232,6 +232,34 @@
               </div>
             </div>
             <p class="mt-1 text-sm text-gray-500">Currently focused on Cleveland, Ohio for our MVP</p>
+          </div>
+
+          <!-- Neighborhood (Optional) -->
+          <div>
+            <label for="neighborhood" class="block text-sm font-semibold text-gray-900 mb-2">Neighborhood (Optional)</label>
+            <div class="relative">
+              <select id="neighborhood" class="w-full rounded-xl border border-gray-300 bg-white px-4 py-3.5 text-gray-900 shadow-sm outline-none transition-all focus:border-primary-500 focus:ring-4 focus:ring-primary-100">
+                <option value="">All Cleveland neighborhoods</option>
+                <option value="Downtown">Downtown</option>
+                <option value="Ohio City">Ohio City</option>
+                <option value="Tremont">Tremont</option>
+                <option value="University Circle">University Circle</option>
+                <option value="Little Italy">Little Italy</option>
+                <option value="Coventry">Coventry</option>
+                <option value="Shaker Square">Shaker Square</option>
+                <option value="Detroit Shoreway">Detroit Shoreway</option>
+                <option value="West Side Market">West Side Market</option>
+                <option value="Playhouse Square">Playhouse Square</option>
+                <option value="Flats">Flats</option>
+                <option value="Lakewood">Lakewood</option>
+                <option value="Cleveland Heights">Cleveland Heights</option>
+                <option value="Shaker Heights">Shaker Heights</option>
+              </select>
+              <span class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
+                <i data-lucide="map" class="h-5 w-5"></i>
+              </span>
+            </div>
+            <p class="mt-1 text-sm text-gray-500">Select a specific neighborhood for more targeted results</p>
           </div>
 
           <!-- Interests -->
@@ -404,6 +432,7 @@
 
       const childAge = parseInt(document.getElementById('childAge').value);
       const location = document.getElementById('location').value.trim();
+      const neighborhood = document.getElementById('neighborhood').value.trim();
       const interests = document.getElementById('interests').value.trim().split(',').map(s => s.trim()).filter(s => s);
       const activityTypes = document.getElementById('activityTypes').value.trim().split(',').map(s => s.trim()).filter(s => s);
       const specialNeeds = document.getElementById('specialNeeds').value.trim().split(',').map(s => s.trim()).filter(s => s);
@@ -461,6 +490,7 @@
           body: JSON.stringify({ 
             child_age: childAge, 
             location: location, 
+            neighborhood: neighborhood,
             interests: interests,
             activity_types: activityTypes,
             special_needs: specialNeeds,
@@ -506,57 +536,43 @@
             </div>
         `;
 
-        // Group by category
-        for (const [category, events] of Object.entries(data.categorized)) {
-          if (events.length > 0) {
-            resultsHtml += `
-              <div class="mb-8">
-                <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <i data-lucide="tag" class="h-5 w-5 text-primary-600"></i>
-                  ${category} (${events.length})
-                </h4>
-                <div class="grid gap-4 sm:grid-cols-2">
-            `;
+        // Render all events in a simple list
+        const allEvents = data.events || [];
+        
+        if (allEvents.length > 0) {
+          resultsHtml += `
+            <div class="space-y-4">
+          `;
+          
+          allEvents.forEach(event => {
+            const buttonHtml = event.link ? `
+              <a href="${event.link}" target="_blank" rel="noopener noreferrer" 
+                 class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-600 bg-primary-50 rounded-lg hover:bg-primary-100 transition-colors">
+                <i data-lucide="external-link" class="h-4 w-4"></i>
+                View Event
+              </a>
+            ` : '';
             
-            events.forEach(event => {
-              // Debug: log event data
-              console.log('=== DEBUG: Rendering Event ===');
-              console.log('Event data:', event);
-              console.log('Event has link:', !!event.link);
-              console.log('Link value:', event.link);
-              console.log('Event title:', event.title);
-              
-              // Debug: Test button HTML generation
-              const buttonHtml = event.link ? `
-                      <a href="${event.link}" target="_blank" rel="noopener noreferrer" 
-                         class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-primary-600 bg-primary-50 rounded-lg hover:bg-primary-100 transition-colors">
-                        <i data-lucide="external-link" class="h-3 w-3"></i>
-                        View Event
-                      </a>
-                    ` : '<span class="text-xs text-gray-400">No link available</span>';
-              console.log('Button HTML generated:', buttonHtml);
-              
-              resultsHtml += `
-                <div class="rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow">
-                  <div class="flex items-start justify-between mb-3">
-                    <h5 class="font-semibold text-gray-900 flex-1">${event.title || 'Activity'}</h5>
-                    ${buttonHtml}
-                  </div>
-                  <div class="space-y-2 text-sm text-gray-600">
-                    ${event.location ? `<div class="flex items-center gap-2"><i data-lucide="map-pin" class="h-4 w-4"></i>${event.location}</div>` : ''}
-                    ${event.date ? `<div class="flex items-center gap-2"><i data-lucide="calendar" class="h-4 w-4"></i>${event.date}</div>` : ''}
-                    ${event.age_range ? `<div class="flex items-center gap-2"><i data-lucide="baby" class="h-4 w-4"></i>Ages ${event.age_range}</div>` : ''}
-                    ${event.price ? `<div class="flex items-center gap-2"><i data-lucide="dollar-sign" class="h-4 w-4"></i>${event.price}</div>` : ''}
-                  </div>
+            resultsHtml += `
+              <div class="w-full rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                <div class="flex items-start justify-between mb-4">
+                  <h5 class="font-semibold text-gray-900 text-lg flex-1">${event.title || 'Activity'}</h5>
+                  ${buttonHtml}
                 </div>
-              `;
-            });
-            
-            resultsHtml += `
+                <div class="space-y-3 text-sm text-gray-600">
+                  ${event.location ? `<div class="flex items-center gap-3"><i data-lucide="map-pin" class="h-4 w-4 text-gray-400"></i>${event.location}</div>` : ''}
+                  ${event.date ? `<div class="flex items-center gap-3"><i data-lucide="calendar" class="h-4 w-4 text-gray-400"></i>${event.date}</div>` : ''}
+                  ${event.age_range ? `<div class="flex items-center gap-3"><i data-lucide="baby" class="h-4 w-4 text-gray-400"></i>Ages ${event.age_range}</div>` : ''}
+                  ${event.price ? `<div class="flex items-center gap-3"><i data-lucide="dollar-sign" class="h-4 w-4 text-gray-400"></i>${event.price}</div>` : ''}
+                  ${event.description ? `<div class="mt-3 pt-3 border-t border-gray-100 text-gray-700">${event.description}</div>` : ''}
                 </div>
               </div>
             `;
-          }
+          });
+          
+          resultsHtml += `
+            </div>
+          `;
         }
 
         resultsHtml += `

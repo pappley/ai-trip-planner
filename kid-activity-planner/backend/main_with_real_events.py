@@ -10,6 +10,9 @@ import json
 import re
 from datetime import datetime, timedelta
 from dotenv import load_dotenv, find_dotenv
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin, urlparse
 load_dotenv(find_dotenv())
 
 # Minimal observability via Arize/OpenInference (optional)
@@ -49,6 +52,7 @@ class KidActivityRequest(BaseModel):
     available_days: List[str] = ["weekend"]
     preferred_times: List[str] = ["morning", "afternoon"]
     transportation: Optional[str] = "car"
+    neighborhood: Optional[str] = None  # Cleveland neighborhood (optional)
 
 
 class KidActivityResponse(BaseModel):
@@ -94,7 +98,6 @@ llm = _init_llm()
 
 
 # Real Event Scraping Tools
-@tool
 def scrape_eventbrite_events(location: str, age_range: str, activity_types: List[str], date_range: str = "next_2_weeks") -> str:
     """Eventbrite integration disabled - returning empty results."""
     # Eventbrite integration disabled
@@ -102,8 +105,50 @@ def scrape_eventbrite_events(location: str, age_range: str, activity_types: List
         return f"Eventbrite events disabled for {location}"
 
 
-@tool
-def scrape_predicthq_events(location: str, age_range: str, activity_types: List[str], date_range: str = "next_2_weeks") -> str:
+def get_cleveland_place_id(neighborhood: str = None) -> str:
+    """Get Cleveland's Place ID from PredictHQ Places API"""
+    api_key = os.getenv("PREDICTHQ_API_KEY")
+    
+    if not api_key or api_key == "your_predicthq_api_key_here":
+        # Return mock Place ID when API key not configured
+        if neighborhood:
+            return f"US-OH-Cleveland-{neighborhood.replace(' ', '-')}"
+        return "US-OH-Cleveland"
+    
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Accept": "application/json"
+            }
+            
+            # Search for Cleveland places
+            params = {
+                "q": f"Cleveland, Ohio{', ' + neighborhood if neighborhood else ''}",
+                "country": "US",
+                "place_type": "city" if not neighborhood else "neighborhood"
+            }
+            
+            response = client.get(
+                "https://api.predicthq.com/v1/places/",
+                headers=headers,
+                params=params
+            )
+            
+            if response.status_code == 200:
+                places = response.json()
+                if places.get('results'):
+                    return places['results'][0]['id']
+    except Exception as e:
+        print(f"Error getting Place ID: {e}")
+    
+    # Fallback Place IDs
+    if neighborhood:
+        return f"US-OH-Cleveland-{neighborhood.replace(' ', '-')}"
+    return "US-OH-Cleveland"
+
+
+def scrape_predicthq_events(location: str, age_range: str, activity_types: List[str], date_range: str = "next_2_weeks", neighborhood: str = None) -> str:
     """Scrape real events from PredictHQ API for kids and families."""
     api_key = os.getenv("PREDICTHQ_API_KEY")
     
@@ -136,6 +181,22 @@ def scrape_predicthq_events(location: str, age_range: str, activity_types: List[
            🏷️ Sports & Entertainment
            📝 Baseball game with special kids activities and meet & greet
         
+        4. Cleveland Museum of Art Family Workshop
+           📍 Cleveland Museum of Art, Cleveland, OH
+           📅 Next Sunday at 1:00 PM
+           👶 Ages 5-10
+           💰 Free (donations welcome)
+           🏷️ Education & Arts
+           📝 Hands-on art workshop for families
+        
+        5. Cleveland Metroparks Nature Program
+           📍 Rocky River Nature Center, Cleveland, OH
+           📅 This Friday at 3:00 PM
+           👶 Ages 4-8
+           💰 Free
+           🏷️ Nature & Education
+           📝 Interactive nature exploration program
+        
         Note: Real-time events available with PredictHQ API key"""
     
     try:
@@ -163,14 +224,14 @@ def scrape_predicthq_events(location: str, age_range: str, activity_types: List[
                 start_date = today.strftime("%Y-%m-%d")
                 end_date = (today + timedelta(days=7)).strftime("%Y-%m-%d")
             
-            # Map activity types to PredictHQ categories
+            # Map activity types to PredictHQ categories (optimized for family/kids events)
             category_mapping = {
-                "science": ["conferences", "expos", "community"],
-                "arts": ["performing-arts", "community", "expos"],
-                "music": ["concerts", "performing-arts", "community"],
+                "science": ["conferences", "expos", "community", "education"],
+                "arts": ["performing-arts", "community", "expos", "festivals"],
+                "music": ["concerts", "performing-arts", "community", "festivals"],
                 "sports": ["sports", "community"],
-                "education": ["conferences", "expos", "community"],
-                "outdoor": ["sports", "community", "festivals"]
+                "education": ["conferences", "expos", "community", "education"],
+                "outdoor": ["sports", "community", "festivals", "performing-arts"]
             }
             
             # Get categories for the activity types
@@ -182,25 +243,37 @@ def scrape_predicthq_events(location: str, age_range: str, activity_types: List[
             # Remove duplicates and limit to 5 categories
             categories = list(set(categories))[:5]
             
-            # Build search parameters
+            # Build search parameters with Cleveland optimization
             params = {
-                "category": ",".join(categories) if categories else "community,expos,concerts,festivals,performing-arts",
+                "category": ",".join(categories) if categories else "community,festivals,performing-arts,education,expos",
                 "active.gte": start_date,
                 "active.lte": end_date,
                 "limit": 10,
-                "brand_unsafe.exclude": "true"  # Exclude potentially inappropriate content
+                "rank.gte": "20",  # Filter for higher quality events (rank 20+)
+                "brand_unsafe.exclude": "true",  # Exclude potentially inappropriate content
+                "active.tz": "America/New_York"  # Cleveland timezone
             }
             
-            # Add location-based search
-            # For now, we'll use a simple approach - in production you'd want to geocode the location
-            if "san francisco" in location.lower():
-                params["within"] = "25km@37.7749,-122.4194"  # SF coordinates
-            elif "new york" in location.lower():
-                params["within"] = "25km@40.7128,-74.0060"  # NYC coordinates
-            elif "los angeles" in location.lower():
-                params["within"] = "25km@34.0522,-118.2437"  # LA coordinates
-            elif "chicago" in location.lower():
-                params["within"] = "25km@41.8781,-87.6298"  # Chicago coordinates
+            # Add location-based search with Cleveland Place ID priority
+            if any(keyword in location.lower() for keyword in ['cleveland', 'ohio', 'oh']):
+                # Get Cleveland Place ID for precise filtering
+                place_id = get_cleveland_place_id(neighborhood)
+                if place_id:
+                    params["place.scope"] = place_id
+                    # Use smaller radius since place.scope is more precise
+                    params["within"] = "5mi@41.4993,-81.6944"  # 5-mile radius for additional precision
+                else:
+                    # Fallback to coordinates if Place ID fails
+                    params["within"] = "15mi@41.4993,-81.6944"  # 15-mile radius around Cleveland
+                
+                # Optimized category selection for family-friendly events
+                params["category"] = "community,festivals,performing-arts,conferences,expos"
+                
+                # Add Cleveland-specific search terms for better relevance
+                cleveland_terms = ["kids", "children", "family", "cleveland", "ohio", "museum", "library", "park", "festival", "community"]
+                if neighborhood:
+                    cleveland_terms.append(neighborhood.lower())
+                params["q"] = " OR ".join(cleveland_terms)
             
             # Make API request
             url = "https://api.predicthq.com/v1/events/"
@@ -282,13 +355,810 @@ def scrape_predicthq_events(location: str, age_range: str, activity_types: List[
     return f"PredictHQ events temporarily unavailable for {location}"
 
 
-@tool
 def scrape_facebook_events(location: str, age_range: str, activity_types: List[str], date_range: str = "next_2_weeks") -> str:
     """Facebook integration disabled - returning empty results."""
     return f"Facebook events disabled for {location}"
 
 
-@tool
+def is_valid_event_title(title: str) -> bool:
+    """Validate that a title represents a real, individual event."""
+    if not title or len(title.strip()) < 10:
+        return False
+    
+    title_lower = title.lower().strip()
+    
+    # Skip navigation and UI elements
+    navigation_keywords = [
+        'click', 'learn more', 'view event', 'download', 'app', 'website', 
+        'menu', 'navigation', 'skip to', 'open menu', 'close menu',
+        'submit an event', 'promoted events', 'events in cleveland',
+        'all dates', 'this weekend', 'events this weekend',
+        'the cleveland event calendar', 'cleveland events calendar',
+        'create your own', 'personal trip', 'destination cleveland app',
+        'faces of', 'best of', 'neighborhood', '500', 'give', 'advertising',
+        'sponsorships', 'cleveland magazine', 'events', 'magazine'
+    ]
+    
+    if any(keyword in title_lower for keyword in navigation_keywords):
+        return False
+    
+    # Skip if it looks like multiple events combined
+    if title.count('View Event') > 1 or title.count('→') > 2:
+        return False
+    
+    # Skip if it's just a single character or symbol
+    if len(title.strip()) <= 2 or title.strip() in ['{', '}', '[', ']', '(', ')']:
+        return False
+    
+    # Skip if it's clearly broken text (starts with lowercase, has weird spacing)
+    if title.startswith('ng ') or title.startswith('on ') or title.startswith('crobats'):
+        return False
+    
+    # Skip if it's too long (likely a combined event or page content)
+    if len(title) > 200:
+        return False
+    
+    # Must contain event-like keywords
+    event_keywords = [
+        'concert', 'festival', 'show', 'event', 'family', 'kids', 'music', 
+        'art', 'food', 'sport', 'game', 'workshop', 'class', 'program',
+        'exhibition', 'performance', 'celebration', 'party', 'fair',
+        'tour', 'walk', 'run', 'race', 'competition', 'contest'
+    ]
+    
+    return any(keyword in title_lower for keyword in event_keywords)
+
+
+def clean_event_title(title: str) -> str:
+    """Clean and normalize event titles."""
+    import re
+    
+    # Remove common UI elements
+    title = re.sub(r'\s*View Event\s*→?\s*', '', title)
+    title = re.sub(r'\s*→\s*', ' ', title)
+    title = re.sub(r'\s+', ' ', title)  # Normalize whitespace
+    title = title.strip()
+    
+    return title
+
+
+def scrape_cleveland_web_events(location: str, age_range: str, activity_types: List[str], date_range: str = "next_2_weeks") -> str:
+    """Scrape events from Cleveland event websites."""
+    try:
+        if not any(keyword in location.lower() for keyword in ['cleveland', 'ohio', 'oh']):
+            return f"Web scraping not available for {location}"
+        
+        events = []
+        
+        # Scrape Cleveland Scene events
+        scene_events = scrape_cleveland_scene_events(age_range, activity_types)
+        events.extend(scene_events)
+        
+        # Scrape Cleveland Traveler events
+        traveler_events = scrape_cleveland_traveler_events(age_range, activity_types)
+        events.extend(traveler_events)
+        
+        # Scrape Cleveland Bucket List events
+        bucket_list_events = scrape_cleveland_bucket_list_events(age_range, activity_types)
+        events.extend(bucket_list_events)
+        
+        # Scrape Destination Cleveland events
+        destination_events = scrape_destination_cleveland_events(age_range, activity_types)
+        events.extend(destination_events)
+        
+        # Scrape Cleveland Magazine events
+        magazine_events = scrape_cleveland_magazine_events(age_range, activity_types)
+        events.extend(magazine_events)
+        
+        # Scrape Cleveland Metroparks events
+        metroparks_events = scrape_metroparks_events(age_range, activity_types)
+        events.extend(metroparks_events)
+        
+        # Scrape Cuyahoga County Library events
+        library_events = scrape_library_events(age_range, activity_types)
+        events.extend(library_events)
+        
+        # Scrape Cleveland.com events
+        cleveland_com_events = scrape_cleveland_com_events(age_range, activity_types)
+        events.extend(cleveland_com_events)
+        
+        # Format the results
+        if events:
+            result = f"Cleveland Web Events (Real Data):\n\n"
+            for i, event in enumerate(events, 1):
+                result += f"{i}. {event['title']}\n"
+                result += f"   📍 {event['location']}\n"
+                result += f"   📅 {event['date']}\n"
+                result += f"   👶 {event['age_range']}\n"
+                result += f"   💰 {event['cost']}\n"
+                result += f"   🏷️ {event['category']}\n"
+                result += f"   📝 {event['description']}\n\n"
+            
+            result += f"Total events found: {len(events)}"
+            return result
+        else:
+            return f"Web events data missing for {location}"
+            
+    except Exception as e:
+        return f"Web scraping temporarily unavailable for {location}: {str(e)}"
+
+
+def scrape_metroparks_events(age_range: str, activity_types: List[str]) -> List[Dict[str, str]]:
+    """Scrape Cleveland Metroparks events."""
+    events = []
+    try:
+        # Try multiple possible URLs for Cleveland Metroparks
+        urls = [
+            "https://www.clevelandmetroparks.com/events",
+            "https://www.clevelandmetroparks.com/programs",
+            "https://www.clevelandmetroparks.com/parks/events",
+            "https://www.clevelandmetroparks.com/calendar"
+        ]
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        for url in urls:
+            try:
+                response = requests.get(url, headers=headers, timeout=10)
+                if response.status_code == 200:
+                    soup = BeautifulSoup(response.content, 'html.parser')
+                    
+                    # Look for any content that might be events
+                    page_text = soup.get_text().lower()
+                    
+                    # Check if page has family/kids content
+                    if any(keyword in page_text for keyword in ['family', 'kids', 'children', 'nature', 'hiking', 'education', 'program']):
+                        # Look for headings that might be event titles
+                        headings = soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+                        
+                        for heading in headings[:5]:  # Limit to 5 events
+                            title = heading.get_text(strip=True)
+                            if title and any(keyword in title.lower() for keyword in ['family', 'kids', 'children', 'nature', 'hiking', 'education', 'program']):
+                                events.append({
+                                    'title': title,
+                                    'location': 'Cleveland Metroparks',
+                                    'date': 'Various dates',
+                                    'age_range': 'All ages',
+                                    'cost': 'Free',
+                                    'category': 'Nature & Outdoor',
+                                    'description': 'Metroparks nature programs and outdoor activities'
+                                })
+                        
+                        if events:  # If we found events, break out of URL loop
+                            break
+                            
+            except Exception:
+                continue
+                
+    except Exception as e:
+        # Return empty list if scraping fails - no mock data
+        events = []
+    
+    return events
+
+
+def scrape_library_events(age_range: str, activity_types: List[str]) -> List[Dict[str, str]]:
+    """Scrape Cuyahoga County Library events."""
+    events = []
+    try:
+        # Cuyahoga County Library events URL
+        url = "https://cuyahogalibrary.org/events"
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Look for any content that might be events
+            page_text = soup.get_text().lower()
+            
+            # Check if page has family/kids content
+            if any(keyword in page_text for keyword in ['story', 'kids', 'children', 'family', 'craft', 'reading', 'program']):
+                # Look for headings that might be event titles
+                headings = soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+                
+                for heading in headings[:5]:  # Limit to 5 events
+                    title = heading.get_text(strip=True)
+                    if title and any(keyword in title.lower() for keyword in ['story', 'kids', 'children', 'family', 'craft', 'reading', 'program']):
+                        events.append({
+                            'title': title,
+                            'location': 'Cuyahoga County Library',
+                            'date': 'Various dates',
+                            'age_range': 'All ages',
+                            'cost': 'Free',
+                            'category': 'Educational',
+                            'description': 'Library programs and educational activities'
+                        })
+                
+                # Also look for any divs with event-related classes
+                event_elements = soup.find_all(['div', 'article'], class_=re.compile(r'event|program', re.I))
+                for element in event_elements[:3]:  # Limit to 3 more events
+                    try:
+                        title_elem = element.find(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+                        if title_elem:
+                            title = title_elem.get_text(strip=True)
+                            if title and any(keyword in title.lower() for keyword in ['story', 'kids', 'children', 'family', 'craft', 'reading']):
+                                events.append({
+                                    'title': title,
+                                    'location': 'Cuyahoga County Library',
+                                    'date': 'Various dates',
+                                    'age_range': 'All ages',
+                                    'cost': 'Free',
+                                    'category': 'Educational',
+                                    'description': 'Library programs and educational activities'
+                                })
+                    except Exception:
+                        continue
+                
+    except Exception as e:
+        # Return empty list if scraping fails - no mock data
+        events = []
+    
+    return events
+
+
+def scrape_cleveland_scene_events(age_range: str, activity_types: List[str]) -> List[Dict[str, str]]:
+    """Scrape Cleveland Scene events - improved with validation."""
+    events = []
+    try:
+        # Cleveland Scene events URL
+        url = "https://www.clevescene.com/cleveland/eventsearch"
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Look for event elements with various selectors
+            event_selectors = [
+                '.event', '.event-item', '.event-card', '.event-listing',
+                '[class*="event"]', '[class*="listing"]', '[class*="card"]',
+                'article', '.post', '.entry'
+            ]
+            
+            found_events = []
+            for selector in event_selectors:
+                elements = soup.select(selector)
+                if elements:
+                    found_events.extend(elements[:10])  # Limit to 10 per selector
+                    break
+            
+            # If no specific event elements found, look for headings and links
+            if not found_events:
+                # Look for headings that might be event titles
+                headings = soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+                for heading in headings:
+                    title = heading.get_text(strip=True)
+                    if title and len(title) > 10 and any(keyword in title.lower() for keyword in ['family', 'kids', 'children', 'concert', 'show', 'festival', 'event']):
+                        found_events.append(heading)
+                
+                # Look for links that might be events
+                links = soup.find_all('a', href=True)
+                for link in links:
+                    link_text = link.get_text(strip=True)
+                    if link_text and len(link_text) > 10 and any(keyword in link_text.lower() for keyword in ['family', 'kids', 'children', 'concert', 'show', 'festival', 'event']):
+                        found_events.append(link)
+            
+            # Process found events with validation
+            for element in found_events[:10]:  # Limit to 10 clean events
+                try:
+                    title = element.get_text(strip=True)
+                    
+                    # Clean the title first
+                    title = clean_event_title(title)
+                    
+                    # Validate the event title
+                    if not is_valid_event_title(title):
+                        continue
+                    
+                    # Determine category based on title
+                    category = 'Community Events'
+                    if any(keyword in title.lower() for keyword in ['music', 'concert', 'band', 'live']):
+                        category = 'Music & Entertainment'
+                    elif any(keyword in title.lower() for keyword in ['art', 'gallery', 'museum', 'exhibition']):
+                        category = 'Arts & Culture'
+                    elif any(keyword in title.lower() for keyword in ['food', 'taste', 'dining', 'restaurant']):
+                        category = 'Food & Dining'
+                    elif any(keyword in title.lower() for keyword in ['sport', 'game', 'fitness', 'run']):
+                        category = 'Sports & Recreation'
+                    elif any(keyword in title.lower() for keyword in ['family', 'kids', 'children']):
+                        category = 'Family & Kids'
+                    
+                    # Determine age appropriateness
+                    age_range_text = 'All ages'
+                    if any(keyword in title.lower() for keyword in ['kids', 'children', 'family', 'toddler']):
+                        age_range_text = 'Family-friendly'
+                    elif any(keyword in title.lower() for keyword in ['adult', '18+', '21+']):
+                        age_range_text = 'Adults only'
+                    
+                    events.append({
+                        'title': title,
+                        'location': 'Cleveland Area',
+                        'date': 'Various dates',
+                        'age_range': age_range_text,
+                        'cost': 'Varies',
+                        'category': category,
+                        'description': f'Cleveland Scene event: {title}'
+                    })
+                except Exception:
+                    continue
+                
+    except Exception as e:
+        # Return empty list if scraping fails - no mock data
+        events = []
+    
+    return events
+
+
+def scrape_cleveland_traveler_events(age_range: str, activity_types: List[str]) -> List[Dict[str, str]]:
+    """Scrape Cleveland Traveler events."""
+    events = []
+    try:
+        # Cleveland Traveler events URL
+        url = "https://clevelandtraveler.com/cleveland-calendar/"
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Look for event elements with various selectors
+            event_selectors = [
+                '.event', '.event-item', '.event-card', '.event-listing',
+                '[class*="event"]', '[class*="listing"]', '[class*="card"]',
+                'article', '.post', '.entry', '.calendar-item'
+            ]
+            
+            found_events = []
+            for selector in event_selectors:
+                elements = soup.select(selector)
+                if elements:
+                    found_events.extend(elements[:8])  # Limit to 8 per selector
+                    break
+            
+            # If no specific event elements found, look for headings and links
+            if not found_events:
+                # Look for headings that might be event titles
+                headings = soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+                for heading in headings:
+                    title = heading.get_text(strip=True)
+                    if title and len(title) > 10 and any(keyword in title.lower() for keyword in ['family', 'kids', 'children', 'concert', 'show', 'festival', 'event', 'cleveland']):
+                        found_events.append(heading)
+                
+                # Look for links that might be events
+                links = soup.find_all('a', href=True)
+                for link in links:
+                    link_text = link.get_text(strip=True)
+                    if link_text and len(link_text) > 10 and any(keyword in link_text.lower() for keyword in ['family', 'kids', 'children', 'concert', 'show', 'festival', 'event', 'cleveland']):
+                        found_events.append(link)
+            
+            # Process found events
+            for element in found_events[:10]:  # Limit to 10 events total
+                try:
+                    title = element.get_text(strip=True)
+                    if title and len(title) > 5:
+                        # Determine category based on title
+                        category = 'Community Events'
+                        if any(keyword in title.lower() for keyword in ['music', 'concert', 'band', 'live']):
+                            category = 'Music & Entertainment'
+                        elif any(keyword in title.lower() for keyword in ['art', 'gallery', 'museum', 'exhibition']):
+                            category = 'Arts & Culture'
+                        elif any(keyword in title.lower() for keyword in ['food', 'taste', 'dining', 'restaurant']):
+                            category = 'Food & Dining'
+                        elif any(keyword in title.lower() for keyword in ['sport', 'game', 'fitness', 'run']):
+                            category = 'Sports & Recreation'
+                        elif any(keyword in title.lower() for keyword in ['family', 'kids', 'children']):
+                            category = 'Family & Kids'
+                        
+                        # Determine age appropriateness
+                        age_range_text = 'All ages'
+                        if any(keyword in title.lower() for keyword in ['kids', 'children', 'family', 'toddler']):
+                            age_range_text = 'Family-friendly'
+                        elif any(keyword in title.lower() for keyword in ['adult', '18+', '21+']):
+                            age_range_text = 'Adults only'
+                        
+                        events.append({
+                            'title': title,
+                            'location': 'Cleveland Area',
+                            'date': 'Various dates',
+                            'age_range': age_range_text,
+                            'cost': 'Varies',
+                            'category': category,
+                            'description': f'Cleveland Traveler event: {title}'
+                        })
+                except Exception:
+                    continue
+                
+    except Exception as e:
+        # Return empty list if scraping fails - no mock data
+        events = []
+    
+    return events
+
+
+def scrape_cleveland_bucket_list_events(age_range: str, activity_types: List[str]) -> List[Dict[str, str]]:
+    """Scrape Cleveland Bucket List events - improved to find individual events."""
+    events = []
+    try:
+        # Cleveland Bucket List events URL
+        url = "https://theclevelandbucketlist.com/cleveland-events"
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Look for individual event entries - more specific selectors
+            event_selectors = [
+                'article.event', '.event-item', '.event-card', '.event-listing',
+                '.tribe-events-list-widget-events', '.tribe-events-widget-events-list',
+                '[data-event-id]', '.tribe-events-list-event-title'
+            ]
+            
+            found_events = []
+            
+            # Try specific event selectors first
+            for selector in event_selectors:
+                elements = soup.select(selector)
+                if elements:
+                    found_events.extend(elements[:8])  # Limit to 8 per selector
+                    break
+            
+            # If no specific event elements, look for event-like content in a more targeted way
+            if not found_events:
+                # Look for text patterns that look like individual events
+                page_text = soup.get_text()
+                
+                # Split by common event separators and look for event-like patterns
+                potential_events = []
+                
+                # Look for date patterns followed by event titles
+                import re
+                date_patterns = [
+                    r'([A-Z][a-z]{2,8}\s+\d{1,2},?\s+\d{4})',  # "Sep 5, 2025"
+                    r'([A-Z][a-z]{2,8}\s+\d{1,2})',  # "Sep 5"
+                    r'(Saturday|Sunday|Monday|Tuesday|Wednesday|Thursday|Friday)',  # Day names
+                ]
+                
+                for pattern in date_patterns:
+                    matches = re.finditer(pattern, page_text)
+                    for match in matches:
+                        start_pos = match.start()
+                        # Extract text around the date (look for event title nearby)
+                        context_start = max(0, start_pos - 200)
+                        context_end = min(len(page_text), start_pos + 300)
+                        context = page_text[context_start:context_end]
+                        
+                        # Look for event-like content in this context
+                        if any(keyword in context.lower() for keyword in ['concert', 'festival', 'show', 'event', 'family', 'kids', 'music', 'art', 'food']):
+                            # Extract a clean event title from the context
+                            lines = context.split('\n')
+                            for line in lines:
+                                line = line.strip()
+                                if (len(line) > 20 and len(line) < 200 and 
+                                    any(keyword in line.lower() for keyword in ['concert', 'festival', 'show', 'event', 'family', 'kids', 'music', 'art', 'food']) and
+                                    not any(skip in line.lower() for skip in ['click', 'learn more', 'view event', 'download', 'app', 'website', 'menu', 'navigation'])):
+                                    potential_events.append(line)
+                                    break
+                
+                # Remove duplicates and limit
+                potential_events = list(dict.fromkeys(potential_events))[:10]
+                found_events = potential_events
+            
+            # Process found events with better filtering
+            for element in found_events[:10]:  # Limit to 10 clean events
+                try:
+                    if isinstance(element, str):
+                        title = element.strip()
+                    else:
+                        title = element.get_text(strip=True)
+                    
+                    # Clean the title first
+                    title = clean_event_title(title)
+                    
+                    # Validate the event title
+                    if not is_valid_event_title(title):
+                        continue
+                    
+                    # Determine category based on title
+                    category = 'Community Events'
+                    if any(keyword in title.lower() for keyword in ['music', 'concert', 'band', 'live']):
+                        category = 'Music & Entertainment'
+                    elif any(keyword in title.lower() for keyword in ['art', 'gallery', 'museum', 'exhibition']):
+                        category = 'Arts & Culture'
+                    elif any(keyword in title.lower() for keyword in ['food', 'taste', 'dining', 'restaurant', 'festival']):
+                        category = 'Food & Dining'
+                    elif any(keyword in title.lower() for keyword in ['sport', 'game', 'fitness', 'run', '5k', 'marathon']):
+                        category = 'Sports & Recreation'
+                    elif any(keyword in title.lower() for keyword in ['family', 'kids', 'children']):
+                        category = 'Family & Kids'
+                    elif any(keyword in title.lower() for keyword in ['nature', 'park', 'outdoor', 'hiking', 'arboretum']):
+                        category = 'Nature & Outdoor'
+                    
+                    # Determine age appropriateness
+                    age_range_text = 'All ages'
+                    if any(keyword in title.lower() for keyword in ['kids', 'children', 'family', 'toddler']):
+                        age_range_text = 'Family-friendly'
+                    elif any(keyword in title.lower() for keyword in ['adult', '18+', '21+']):
+                        age_range_text = 'Adults only'
+                    
+                    events.append({
+                        'title': title,
+                        'location': 'Cleveland Area',
+                        'date': 'Various dates',
+                        'age_range': age_range_text,
+                        'cost': 'Varies',
+                        'category': category,
+                        'description': f'Cleveland Bucket List event: {title}'
+                    })
+                except Exception:
+                    continue
+                
+    except Exception as e:
+        # Return empty list if scraping fails - no mock data
+        events = []
+    
+    return events
+
+
+def scrape_destination_cleveland_events(age_range: str, activity_types: List[str]) -> List[Dict[str, str]]:
+    """Scrape Destination Cleveland events - improved to find individual events."""
+    events = []
+    try:
+        # Destination Cleveland events URL
+        url = "https://www.thisiscleveland.com/events"
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Look for specific event elements
+            event_selectors = [
+                '.event', '.event-item', '.event-card', '.event-listing',
+                'article.event', '.tribe-events-list-widget-events',
+                '[data-event-id]', '.tribe-events-list-event-title'
+            ]
+            
+            found_events = []
+            for selector in event_selectors:
+                elements = soup.select(selector)
+                if elements:
+                    found_events.extend(elements[:5])  # Limit to 5 per selector
+                    break
+            
+            # If no specific event elements, look for event-like content more carefully
+            if not found_events:
+                # Look for headings that might be actual events (not navigation)
+                headings = soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+                for heading in headings:
+                    title = heading.get_text(strip=True)
+                    if (title and len(title) > 15 and len(title) < 150 and
+                        any(keyword in title.lower() for keyword in ['concert', 'festival', 'show', 'event', 'family', 'kids', 'music', 'art', 'food', 'sport']) and
+                        not any(skip in title.lower() for skip in ['download', 'app', 'website', 'menu', 'navigation', 'destination cleveland', 'learn more', 'click'])):
+                        found_events.append(heading)
+            
+            # Process found events with better filtering
+            for element in found_events[:5]:  # Limit to 5 clean events
+                try:
+                    title = element.get_text(strip=True)
+                    
+                    # Clean the title first
+                    title = clean_event_title(title)
+                    
+                    # Validate the event title
+                    if not is_valid_event_title(title):
+                        continue
+                    
+                    # Determine category based on title
+                    category = 'Community Events'
+                    if any(keyword in title.lower() for keyword in ['music', 'concert', 'band', 'live']):
+                        category = 'Music & Entertainment'
+                    elif any(keyword in title.lower() for keyword in ['art', 'gallery', 'museum', 'exhibition']):
+                        category = 'Arts & Culture'
+                    elif any(keyword in title.lower() for keyword in ['food', 'taste', 'dining', 'restaurant']):
+                        category = 'Food & Dining'
+                    elif any(keyword in title.lower() for keyword in ['sport', 'game', 'fitness', 'run']):
+                        category = 'Sports & Recreation'
+                    elif any(keyword in title.lower() for keyword in ['family', 'kids', 'children']):
+                        category = 'Family & Kids'
+                    elif any(keyword in title.lower() for keyword in ['nature', 'park', 'outdoor', 'hiking']):
+                        category = 'Nature & Outdoor'
+                    elif any(keyword in title.lower() for keyword in ['tourism', 'visit', 'destination']):
+                        category = 'Tourism & Attractions'
+                    
+                    # Determine age appropriateness
+                    age_range_text = 'All ages'
+                    if any(keyword in title.lower() for keyword in ['kids', 'children', 'family', 'toddler']):
+                        age_range_text = 'Family-friendly'
+                    elif any(keyword in title.lower() for keyword in ['adult', '18+', '21+']):
+                        age_range_text = 'Adults only'
+                    
+                    events.append({
+                        'title': title,
+                        'location': 'Cleveland Area',
+                        'date': 'Various dates',
+                        'age_range': age_range_text,
+                        'cost': 'Varies',
+                        'category': category,
+                        'description': f'Destination Cleveland event: {title}'
+                    })
+                except Exception:
+                    continue
+                
+    except Exception as e:
+        # Return empty list if scraping fails - no mock data
+        events = []
+    
+    return events
+
+
+def scrape_cleveland_magazine_events(age_range: str, activity_types: List[str]) -> List[Dict[str, str]]:
+    """Scrape Cleveland Magazine events - improved to find individual events."""
+    events = []
+    try:
+        # Cleveland Magazine events URL
+        url = "https://www.clevelandmagazine.com/events"
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Look for specific event elements
+            event_selectors = [
+                '.event', '.event-item', '.event-card', '.event-listing',
+                'article.event', '.tribe-events-list-widget-events',
+                '[data-event-id]', '.tribe-events-list-event-title'
+            ]
+            
+            found_events = []
+            for selector in event_selectors:
+                elements = soup.select(selector)
+                if elements:
+                    found_events.extend(elements[:5])  # Limit to 5 per selector
+                    break
+            
+            # If no specific event elements, look for event-like content more carefully
+            if not found_events:
+                # Look for headings that might be actual events (not navigation)
+                headings = soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+                for heading in headings:
+                    title = heading.get_text(strip=True)
+                    if (title and len(title) > 15 and len(title) < 150 and
+                        any(keyword in title.lower() for keyword in ['concert', 'festival', 'show', 'event', 'family', 'kids', 'music', 'art', 'food', 'sport']) and
+                        not any(skip in title.lower() for skip in ['magazine', 'events', 'cleveland magazine', 'faces of', 'best of', 'neighborhood', '500', 'give', 'advertising', 'sponsorships'])):
+                        found_events.append(heading)
+            
+            # Process found events with better filtering
+            for element in found_events[:5]:  # Limit to 5 clean events
+                try:
+                    title = element.get_text(strip=True)
+                    
+                    # Clean the title first
+                    title = clean_event_title(title)
+                    
+                    # Validate the event title
+                    if not is_valid_event_title(title):
+                        continue
+                    
+                    # Determine category based on title
+                    category = 'Community Events'
+                    if any(keyword in title.lower() for keyword in ['music', 'concert', 'band', 'live']):
+                        category = 'Music & Entertainment'
+                    elif any(keyword in title.lower() for keyword in ['art', 'gallery', 'museum', 'exhibition']):
+                        category = 'Arts & Culture'
+                    elif any(keyword in title.lower() for keyword in ['food', 'taste', 'dining', 'restaurant']):
+                        category = 'Food & Dining'
+                    elif any(keyword in title.lower() for keyword in ['sport', 'game', 'fitness', 'run']):
+                        category = 'Sports & Recreation'
+                    elif any(keyword in title.lower() for keyword in ['family', 'kids', 'children']):
+                        category = 'Family & Kids'
+                    elif any(keyword in title.lower() for keyword in ['nature', 'park', 'outdoor', 'hiking']):
+                        category = 'Nature & Outdoor'
+                    
+                    # Determine age appropriateness
+                    age_range_text = 'All ages'
+                    if any(keyword in title.lower() for keyword in ['kids', 'children', 'family', 'toddler']):
+                        age_range_text = 'Family-friendly'
+                    elif any(keyword in title.lower() for keyword in ['adult', '18+', '21+']):
+                        age_range_text = 'Adults only'
+                    
+                    events.append({
+                        'title': title,
+                        'location': 'Cleveland Area',
+                        'date': 'Various dates',
+                        'age_range': age_range_text,
+                        'cost': 'Varies',
+                        'category': category,
+                        'description': f'Cleveland Magazine event: {title}'
+                    })
+                except Exception:
+                    continue
+                
+    except Exception as e:
+        # Return empty list if scraping fails - no mock data
+        events = []
+    
+    return events
+
+
+def scrape_cleveland_com_events(age_range: str, activity_types: List[str]) -> List[Dict[str, str]]:
+    """Scrape Cleveland.com events."""
+    events = []
+    try:
+        # Try multiple possible URLs for Cleveland.com events
+        urls = [
+            "https://www.cleveland.com/entertainment/",
+            "https://www.cleveland.com/events/",
+            "https://www.cleveland.com/things-to-do/",
+            "https://www.cleveland.com/community/"
+        ]
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        for url in urls:
+            try:
+                response = requests.get(url, headers=headers, timeout=10)
+                if response.status_code == 200:
+                    soup = BeautifulSoup(response.content, 'html.parser')
+                    
+                    # Look for any content that might be events
+                    page_text = soup.get_text().lower()
+                    
+                    # Check if page has family/kids content
+                    if any(keyword in page_text for keyword in ['family', 'kids', 'children', 'festival', 'community', 'museum', 'event']):
+                        # Look for headings that might be event titles
+                        headings = soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+                        
+                        for heading in headings[:5]:  # Limit to 5 events
+                            title = heading.get_text(strip=True)
+                            if title and any(keyword in title.lower() for keyword in ['family', 'kids', 'children', 'festival', 'community', 'museum', 'event']):
+                                events.append({
+                                    'title': title,
+                                    'location': 'Cleveland Area',
+                                    'date': 'Various dates',
+                                    'age_range': 'All ages',
+                                    'cost': 'Varies',
+                                    'category': 'Community Events',
+                                    'description': 'Local community events and activities'
+                                })
+                        
+                        if events:  # If we found events, break out of URL loop
+                            break
+                            
+            except Exception:
+                continue
+                
+    except Exception as e:
+        # Return empty list if scraping fails - no mock data
+        events = []
+    
+    return events
+
+
 def scrape_local_venue_events(location: str, age_range: str, activity_types: List[str], date_range: str = "next_2_weeks") -> str:
     """Scrape events from local venues like museums, libraries, and community centers."""
     try:
@@ -428,40 +1298,47 @@ def scrape_local_venue_events(location: str, age_range: str, activity_types: Lis
         return f"Local venue events temporarily unavailable for {location}: {str(e)}"
 
 
-@tool
 def discover_local_events_real(
     location: str, 
     age_range: str, 
     activity_types: List[str],
-    date_range: str = "next_2_weeks"
+    date_range: str = "next_2_weeks",
+    neighborhood: str = None
 ) -> str:
     """Discover real local events and activities for children using multiple APIs."""
     try:
         # Combine results from multiple sources
-        predicthq_events = scrape_predicthq_events.invoke({
-            'location': location, 
-            'age_range': age_range, 
-            'activity_types': activity_types, 
-            'date_range': date_range
-        })
-        eventbrite_events = scrape_eventbrite_events.invoke({
-            'location': location, 
-            'age_range': age_range, 
-            'activity_types': activity_types, 
-            'date_range': date_range
-        })
-        facebook_events = scrape_facebook_events.invoke({
-            'location': location, 
-            'age_range': age_range, 
-            'activity_types': activity_types, 
-            'date_range': date_range
-        })
-        local_venue_events = scrape_local_venue_events.invoke({
-            'location': location, 
-            'age_range': age_range, 
-            'activity_types': activity_types, 
-            'date_range': date_range
-        })
+        predicthq_events = scrape_predicthq_events(
+            location, 
+            age_range, 
+            activity_types, 
+            date_range,
+            neighborhood
+        )
+        eventbrite_events = scrape_eventbrite_events(
+            location, 
+            age_range, 
+            activity_types, 
+            date_range
+        )
+        facebook_events = scrape_facebook_events(
+            location, 
+            age_range, 
+            activity_types, 
+            date_range
+        )
+        local_venue_events = scrape_local_venue_events(
+            location, 
+            age_range, 
+            activity_types, 
+            date_range
+        )
+        cleveland_web_events = scrape_cleveland_web_events(
+            location, 
+            age_range, 
+            activity_types, 
+            date_range
+        )
         
         # Combine all sources
         combined_summary = f"Real Events Discovery for {location}:\n\n"
@@ -480,6 +1357,9 @@ def discover_local_events_real(
         combined_summary += "=" * 50 + "\n"
         combined_summary += "LOCAL VENUE EVENTS:\n"
         combined_summary += local_venue_events + "\n\n"
+        combined_summary += "=" * 50 + "\n"
+        combined_summary += "CLEVELAND WEB EVENTS:\n"
+        combined_summary += cleveland_web_events + "\n\n"
         
         combined_summary += "=" * 50 + "\n"
         combined_summary += "SUMMARY:\n"
@@ -1027,13 +1907,14 @@ def discover_activities(req: KidActivityRequest):
         # Execute the parallel graph
         out = graph.invoke(state)
         
-        # Get real events directly from the tool
-        real_events = discover_local_events_real.invoke({
-            'location': req.location,
-            'age_range': str(req.child_age),
-            'activity_types': req.interests,
-            'date_range': 'next_2_weeks'
-        })
+        # Get real events directly from the function
+        real_events = discover_local_events_real(
+            req.location,
+            str(req.child_age),
+            req.interests,
+            'next_2_weeks',
+            req.neighborhood
+        )
         
         # Parse the results for structured response
         events_text = real_events  # Use real events instead of LLM response

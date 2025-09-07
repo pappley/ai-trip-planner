@@ -1,0 +1,26 @@
+# AI Trip Planner - Real API Integration Environment Variables
+# Copy this file to .env and add your actual API keys
+
+# LLM Provider (choose one)
+OPENAI_API_KEY=your_openai_api_key_here
+# OR
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+OPENROUTER_MODEL=openai/gpt-4o-mini
+
+# Real API Integrations
+# Weather Data
+OPENWEATHER_API_KEY=your_openweather_api_key_here
+
+# Local Recommendations
+FOURSQUARE_API_KEY=your_foursquare_api_key_here
+
+# Budget & Cost Data (optional - using mock data for now)
+NUMBEO_API_KEY=your_numbeo_api_key_here
+
+# Observability (optional)
+ARIZE_SPACE_ID=your_arize_space_id
+ARIZE_API_KEY=your_arize_api_key
+
+# Development
+TEST_MODE=false
+
